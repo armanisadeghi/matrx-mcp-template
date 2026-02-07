@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# Build output
+dist/
+build/
+*.js.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Wrangler
+.wrangler/
+
+# Docker
+*.log
+
+# Generated MCPs directory (each MCP may have its own repo)
+mcps/

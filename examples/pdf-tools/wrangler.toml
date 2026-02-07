@@ -1,0 +1,7 @@
+name = "pdf-tools"
+main = "src/server.py"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["python_workers"]
+
+[vars]
+MCP_NAME = "PDF Tools"

@@ -1,0 +1,16 @@
+services:
+  mcp-server:
+    build: .
+    container_name: {{MCP_SLUG}}
+    restart: always
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - MCP_NAME={{MCP_NAME}}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

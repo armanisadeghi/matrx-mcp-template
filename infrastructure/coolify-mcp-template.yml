@@ -1,0 +1,61 @@
+# Coolify Docker Compose Template for MCP Servers
+#
+# This is a reference template for deploying MCP servers via Coolify.
+# Copy and modify for each MCP you deploy.
+#
+# In Coolify: New Resource → Docker Compose → paste/link this file
+# Set environment variables in the Coolify UI.
+
+services:
+  mcp-server:
+    build: .
+    container_name: ${MCP_SLUG:-my-mcp}
+    restart: always
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - MCP_NAME=${MCP_NAME:-My MCP Server}
+      - PORT=${PORT:-8000}
+      - TRANSPORT=streamable-http
+      # Auth (set in Coolify UI)
+      - MCP_API_KEYS=${MCP_API_KEYS:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# --- Optional: Add PostgreSQL if MCP needs its own database ---
+# Uncomment the section below if your MCP needs a dedicated database.
+#
+#   db:
+#     image: postgres:16-alpine
+#     restart: always
+#     environment:
+#       POSTGRES_DB: ${DB_NAME:-mcpdata}
+#       POSTGRES_USER: ${DB_USER:-mcpuser}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD}
+#     volumes:
+#       - pgdata:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mcpuser}"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#
+# volumes:
+#   pgdata:

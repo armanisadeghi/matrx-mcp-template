@@ -1,0 +1,16 @@
+services:
+  mcp-server:
+    build: .
+    container_name: bug-tracker
+    restart: always
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - MCP_NAME=Bug Tracker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

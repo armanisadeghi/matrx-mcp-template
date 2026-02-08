@@ -1,71 +1,64 @@
-# Decisions for Arman
+# Decisions Log
 
-These are questions that came up during implementation. Answers will inform follow-up work.
+All architectural decisions for the MCP Factory. Each decision is marked with its status.
 
-## 1. Domain for MCP Subdomains
+## 1. Domain for MCP Subdomains ✅ RESOLVED
 
-**Question:** What domain do you want to use for VPS-hosted MCPs?
+**Question:** What domain to use for VPS-hosted MCPs?
 
-**Options:**
-- `*.mcp.aimatrx.com` (subdomain of your main domain)
-- `*.mcp.yourdomain.com` (a separate domain)
-- Buy a short domain like `mcps.dev` or similar
+**Decision:** `*.mcp.aimatrx.com`
+- Wildcard subdomain of the main AI Matrx domain
+- Must support a pattern allowing users/organizations to have their own MCPs (e.g., route-based or nested subdomain)
+- Cloudflare Workers use `*.workers.dev` by default (free), custom domain is optional
 
-**Impact:** Needed for DNS wildcard setup and Coolify configuration. Cloudflare Workers use `*.workers.dev` by default (free), custom domain is optional.
+**Action Required:** Configure DNS wildcard A record once Hostinger VPS is provisioned.
 
-**Answer:**
-- This works just fine: *.mcp.aimatrx.com but we need to keep in mind that we need to create a pattern that will allow our users/organizations to then have their own mcps, such as a route within this subdomain, if that's possible.
+---
 
-## 2. Supabase Project
+## 2. Supabase Project ✅ RESOLVED
 
-**Question:** Should MCPs with Supabase auth use your existing AI Matrx Supabase project or a separate one?
+**Question:** Should MCPs use the existing AI Matrx Supabase project or a separate one?
 
-**Recommendation:** Use the same project — this way users authenticate once and their JWT works everywhere. Only create a separate project if you need full data isolation.
+**Decision:** Use the **same** AI Matrx Supabase project.
+- Users authenticate once and their JWT works everywhere
+- No data isolation needed for MCP auth
 
-**Answer:**
-- The same project.
+**Action Required:** Retrieve credentials (URL, JWT secret, service role key) from the existing Supabase dashboard.
 
+---
 
-## 3. Cloudflare Workers Python Support
+## 3. Cloudflare Workers Python Support ✅ RESOLVED
 
-**Question:** Cloudflare Workers Python support is still relatively new and has limited package compatibility. For Python MCPs that use heavy dependencies (like PDF processing with PyPDF2), should we:
+**Question:** How to handle Python MCPs with heavy dependencies on Cloudflare?
 
-**Options:**
-- A) Try Cloudflare first, fall back to VPS if packages aren't supported
-- B) Always use VPS for Python MCPs with non-trivial dependencies
-- C) Use TypeScript for Cloudflare MCPs and Python only for VPS
+**Decision:** **Option A** — Try Cloudflare first, fall back to VPS if packages aren't supported.
+- Option B for anything with native dependencies
+- The generator supports both tiers, so switching is a simple re-scaffold
 
-**Recommendation:** Option A for simple tools, Option B for anything with native dependencies. The generator already supports both tiers, so switching is just a re-scaffold.
+**Action Required:** None — generator already supports this workflow.
 
-**Answer:**
-- I agree with your recommendation: Option A for simple tools, Option B for anything with native dependencies. The generator already supports both tiers, so switching is just a re-scaffold
+---
 
+## 4. Client MCP Delivery ✅ RESOLVED
 
-## 4. Client MCP Delivery
+**Question:** How to deliver MCPs to clients?
 
-**Question:** When delivering MCPs to clients, how do you want to handle it?
+**Decision:** **Mix** — host some ourselves, clients host others.
+- Use `--separate-repo` flag for client deliverables
+- Self-host for internal/shared MCPs
 
-**Options:**
-- A) Host everything yourself (clients just get the MCP endpoint URL)
-- B) Give clients their own repo with `--separate-repo` flag (they self-host)
-- C) Mix — you host some, clients host others
+**Action Required:** None — generator already supports `--separate-repo` flag.
 
-**Impact:** Affects whether we need to build multi-tenant support, billing, and client onboarding docs.
+---
 
-**Answer:**
-- The reality will be a mix
+## 5. MCP Registry / Discovery ✅ RESOLVED
 
+**Question:** How to track and discover deployed MCPs?
 
-## 5. MCP Registry / Discovery
+**Decision:** **Postgres table in the AI Matrx Supabase database.**
+- Not just a JSON file — needs proper database tracking
+- Track MCP name, endpoint, status, tier, auth type, etc.
+- Keep the database always up-to-date with available MCPs
+- Generator should auto-register new MCPs on creation
 
-**Question:** As you build more MCPs, do you want a central registry that lists all available MCPs and their endpoints?
-
-**Options:**
-- A) Simple README/JSON file in this repo listing all deployed MCPs
-- B) A small web dashboard (could be another MCP or a simple Next.js page)
-- C) Not needed yet — just track in docs
-
-**Recommendation:** Start with Option A (a `registry.json` file). Build a dashboard later if the list grows past 20+.
-
-**Answer:**
-- We will not only need to properly track them but they must also be tracked in a postgres database that we have for our main app, aimatrx, so just design a table and we'll set up the table and ensure that the database is always up to date with the available mcps, their status, etc.
+**Action Required:** Design and create the Supabase table, update the generator to register MCPs.

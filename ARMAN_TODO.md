@@ -19,10 +19,13 @@ Last updated: 2026-02-08
 - [x] Generator auto-registers new MCPs in the registry (soft-fail if no credentials)
 - [x] Migration saved locally (`infrastructure/migrations/001_create_mcp_registry.sql`)
 - [x] Root `.env.example` created
+- [x] GitHub default branch set to `main`, old branch cleaned up
+- [x] Cloudflare account verified & ready (Account ID: `08e81b35149e50e351b86aa6a1872c6d`, Workers subdomain: `orange-salad-fa20.workers.dev`)
 
 ## 🔲 Infrastructure Setup (Requires Browser/Human)
 
-- [ ] **Cloudflare account** — Create account or confirm existing, run `wrangler login`
+- [x] ~~**Cloudflare account** — Create account or confirm existing~~ ✅ Done
+- [x] ~~**`wrangler login`** — Run in terminal to authenticate CLI with Cloudflare~~ ✅ Done
 - [ ] **Hostinger VPS** — Purchase KVM 2 plan with Coolify template (Ubuntu 24.04)
 - [ ] **DNS wildcard** — Add `*.mcp.aimatrx.com → {VPS_IP}` A record
 - [ ] **Supabase credentials** — Get service role key + JWT secret from existing project, add to `.env`

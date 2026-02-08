@@ -9,6 +9,8 @@ Items that need human decisions or actions.
 - [ ] **Supabase project** — Are you using an existing AI Matrx Supabase project for MCP auth, or creating a separate one?
 - [ ] **Cloudflare account** — Existing account or new one? Free tier handles 100K requests/day.
 
+-- I Have answered everything inside of the decision file.
+
 ## Account Setup
 
 - [ ] Set up Cloudflare account and run `wrangler login`

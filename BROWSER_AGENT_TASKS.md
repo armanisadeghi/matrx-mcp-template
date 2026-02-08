@@ -1,44 +1,85 @@
 # Browser Agent Tasks
 
-These tasks require browser access and cannot be done from the terminal.
+Tasks that require browser interaction. The browser agent can ask for human assistance as needed.
 
-## Cloudflare Setup
+## Task 1: Cloudflare Workers Setup
 
-- [ ] **Create Cloudflare account** (if you don't have one): https://dash.cloudflare.com/sign-up
-- [ ] **Run `wrangler login`** to authenticate the CLI with your Cloudflare account
-- [ ] **Test deploy** the meta-tag-checker example to verify the Cloudflare workflow:
-  ```bash
-  cd examples/meta-tag-checker && wrangler deploy
-  ```
-- [ ] **(Optional) Add custom domain** in Cloudflare dashboard for Worker routes
+**Goal:** Set up Cloudflare Workers so we can deploy stateless MCPs to the edge.
 
-## Hostinger VPS Setup
+**Steps:**
+1. Go to https://dash.cloudflare.com/sign-up (or log in if account exists)
+2. Create a free account (if new)
+3. Note the account ID from the dashboard (Settings → Account → Account ID)
+4. No Workers need to be created manually — we deploy via `wrangler` CLI
 
-- [ ] **Purchase Hostinger KVM 2 VPS** at https://www.hostinger.com/vps-hosting
-  - Select "Ubuntu 24.04 with Coolify" during onboarding
-  - Note the VPS IP address and root password
-- [ ] **Access Coolify dashboard** at `http://{VPS_IP}:8000`
-  - Create admin account
-  - Select "localhost" during onboarding
-- [ ] **Configure DNS** — Add wildcard A record: `*.mcp.yourdomain.com → {VPS_IP}`
-- [ ] **Enable SSL** in Coolify settings (Let's Encrypt)
-- [ ] **Connect GitHub** in Coolify → Settings → Sources → Add GitHub App
-- [ ] **(Optional) Get Hostinger API token** from dashboard → Account → API
+**What to return:**
+- Cloudflare account email
+- Account ID
+- Confirmation that the account is active
 
-## Supabase Configuration
+**After browser task:** Run `wrangler login` in the terminal to authenticate the CLI.
 
-- [ ] **Get Supabase credentials** from Supabase Dashboard → Settings → API:
-  - `SUPABASE_URL`
-  - `SUPABASE_JWT_SECRET` (under "JWT Settings")
-  - `SUPABASE_SERVICE_ROLE_KEY` (under "Service Role")
-- [ ] **Create Supabase tables** for MCPs that need them:
-  - Bug tracker: `bugs` table with columns (id, title, description, severity, status, app_name, created_at, updated_at, user_id)
-  - Virtual tables: `virtual_table_definitions` and `virtual_table_rows` tables
-- [ ] **Set up RLS policies** for user-scoped data access
+---
 
-## Deployment Verification
+## Task 2: Hostinger VPS Purchase & Coolify Setup
 
-- [ ] **Deploy meta-tag-checker** to Cloudflare Workers and verify `/mcp` endpoint responds
-- [ ] **Deploy bug-tracker** to Coolify/VPS and verify `/mcp` endpoint responds
-- [ ] **Test authentication** — verify API key and Supabase JWT flows work end-to-end
-- [ ] **Configure MCP clients** (Claude Desktop, Cursor, etc.) to connect to deployed MCPs
+**Goal:** Set up a VPS with Coolify for deploying stateful Docker-based MCPs.
+
+**Steps:**
+1. Go to https://www.hostinger.com/vps-hosting
+2. Purchase the **KVM 2** plan (~$7–10/mo) — 2 vCPU, 8GB RAM, 100GB NVMe
+3. During onboarding, select **"Ubuntu 24.04 with Coolify"** template
+4. Set a root password and note it
+5. Note the **VPS IP address**
+6. Access Coolify at `http://{VPS_IP}:8000`
+7. Create an admin account on first access
+8. Select "localhost" during Coolify onboarding (deploy to same server)
+9. Get the **Hostinger API token**: Dashboard → Account → API
+
+**What to return:**
+- VPS IP address
+- Root password (store securely)
+- Coolify admin credentials
+- Hostinger API token
+
+---
+
+## Task 3: DNS Wildcard Configuration
+
+**Prerequisite:** Task 2 completed (need VPS IP)
+
+**Goal:** Point `*.mcp.aimatrx.com` to the VPS for MCP subdomains.
+
+**Steps:**
+1. Go to your DNS provider for `aimatrx.com`
+2. Add a wildcard A record: `*.mcp` → `{VPS_IP}`
+3. Verify propagation (may take up to 48h but usually 5-15 min)
+
+**What to return:**
+- Confirmation that the DNS record was added
+- The VPS IP used
+
+---
+
+## Task 4: Supabase Credentials
+
+**Goal:** Get credentials from the existing AI Matrx Supabase project for MCP auth.
+
+**Steps:**
+1. Go to https://supabase.com/dashboard
+2. Open the AI Matrx project
+3. Go to Settings → API
+4. Copy:
+   - **Project URL** (starts with `https://`)
+   - **anon/public key**
+   - **service_role key** (click "Reveal")
+5. Go to Settings → API → JWT Settings
+6. Copy the **JWT Secret**
+
+**What to return:**
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_JWT_SECRET`
+
+**Note:** These should be stored as environment variables, never committed to code.

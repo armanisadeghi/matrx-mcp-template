@@ -1,34 +1,45 @@
-# Arman's TODO
+# Project Status & TODO
 
-Items that need human decisions or actions.
+Last updated: 2026-02-08
 
-## Decisions Needed
+## ✅ Completed
 
-- [ ] **Choose a domain** for MCP subdomains (e.g., `*.mcp.aimatrx.com` or a new domain)
-- [ ] **Confirm Hostinger plan** — KVM 2 ($7–10/mo) should be sufficient to start. Upgrade to KVM 4 if running 30+ MCPs.
-- [ ] **Supabase project** — Are you using an existing AI Matrx Supabase project for MCP auth, or creating a separate one?
-- [ ] **Cloudflare account** — Existing account or new one? Free tier handles 100K requests/day.
+- [x] Repository structure created (monorepo with generators, templates, shared, examples, docs, infrastructure)
+- [x] Generator script (`create-mcp.sh`) — handles all 4 template combos with auth/db options
+- [x] Generator bug fix — cross-platform `sed -i` compatibility (macOS + Linux)
+- [x] Generator bug fix — `mkdir -p` for `mcps/` directory creation
+- [x] Templates built: python-cloudflare, python-vps, typescript-cloudflare, typescript-vps
+- [x] All 4 template combos tested and verified (placeholder replacement, file structure, auth/db setup)
+- [x] Example MCPs: meta-tag-checker, pdf-tools, bug-tracker, virtual-tables
+- [x] Shared utilities: auth (API key + Supabase JWT), Supabase client, structured logging
+- [x] Documentation: deployment guides (Cloudflare + VPS), auth guide, adding-tools guide
+- [x] All 5 architectural decisions resolved (see ARMAN_DECISIONS.md)
+- [x] MCP Registry table created in Supabase (`mcp_registry` in ai-matrix project)
+- [x] Registry scripts: `register-mcp.sh`, `update-mcp-status.sh`, `list-mcps.sh`
+- [x] Generator auto-registers new MCPs in the registry (soft-fail if no credentials)
+- [x] Migration saved locally (`infrastructure/migrations/001_create_mcp_registry.sql`)
+- [x] Root `.env.example` created
 
--- I Have answered everything inside of the decision file.
+## 🔲 Infrastructure Setup (Requires Browser/Human)
 
-## Account Setup
+- [ ] **Cloudflare account** — Create account or confirm existing, run `wrangler login`
+- [ ] **Hostinger VPS** — Purchase KVM 2 plan with Coolify template (Ubuntu 24.04)
+- [ ] **DNS wildcard** — Add `*.mcp.aimatrx.com → {VPS_IP}` A record
+- [ ] **Supabase credentials** — Get service role key + JWT secret from existing project, add to `.env`
+- [ ] **Hostinger API token** — Get from dashboard for AI-managed VPS
 
-- [ ] Set up Cloudflare account and run `wrangler login`
-- [ ] Purchase Hostinger VPS (KVM 2 with Coolify template)
-- [ ] Get Hostinger API token for the Hostinger MCP server
+## 🔲 First Deployments
 
-## First MCPs to Build
+- [ ] **Meta Tag Checker → Cloudflare** (validates CF workflow)
+- [ ] **Bug Tracker → VPS/Coolify** (validates VPS workflow, needs Supabase tables first)
+- [ ] **Verify MCP endpoints** with curl tests
+- [ ] **Configure MCP clients** (Claude Desktop, Cursor) to connect
 
-Suggested order based on complexity (simplest first to validate the workflow):
+## 🔲 Enhancements (Future)
 
-1. **Meta Tag Checker** → Deploy to Cloudflare (example already built, just deploy)
-2. **PDF Tools** → Deploy to Cloudflare (example already built)
-3. **A client marketing tools MCP** → Use the generator to scaffold, add custom tools
-4. **Bug Tracker** → Deploy to VPS/Coolify (needs Supabase tables first)
-5. **Virtual Tables** → Deploy to VPS/Coolify (needs Supabase schema design)
-
-## Ongoing
-
-- [ ] For each new client MCP, decide: Cloudflare (stateless) or VPS (stateful)?
-- [ ] Set up monitoring/alerting for VPS MCPs (Coolify has basic monitoring built in)
-- [ ] Consider a billing strategy if charging clients for MCP access
+- [ ] `deploy.sh` helper script for both CF and Docker deployments
+- [ ] GitHub Actions CI/CD for auto-deploy on push
+- [ ] Multi-tenant routing design — support `org.mcp.aimatrx.com` or route-based patterns
+- [ ] Health-check monitoring script
+- [ ] Rate limiting middleware in shared utilities
+- [ ] Registry dashboard (web UI for MCP discovery)

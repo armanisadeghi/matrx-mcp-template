@@ -26,6 +26,19 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# --- Platform Detection ---
+IS_MACOS=false
+[[ "$(uname)" == "Darwin" ]] && IS_MACOS=true
+
+# Helper: cross-platform sed -i
+sed_i() {
+    if $IS_MACOS; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
 # --- Functions ---
 
 usage() {
@@ -143,25 +156,19 @@ echo -e "  Database: ${DB}"
 echo ""
 
 info "Copying template from ${LANG}-${TIER}..."
+mkdir -p "$(dirname "$OUTPUT_DIR")"
 cp -r "$TEMPLATE_DIR" "$OUTPUT_DIR"
 
 # --- Replace Placeholders ---
 
 info "Replacing placeholders..."
-if [[ "$(uname)" == "Darwin" ]]; then
-    # macOS sed requires '' after -i
-    find "$OUTPUT_DIR" -type f \( -name "*.py" -o -name "*.ts" -o -name "*.json" -o -name "*.toml" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" -o -name "*.example" -o -name "*.cfg" -o -name "Dockerfile" \) -exec sed -i '' \
+find "$OUTPUT_DIR" -type f \( -name "*.py" -o -name "*.ts" -o -name "*.json" -o -name "*.toml" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" -o -name "*.example" -o -name "*.cfg" -o -name "Dockerfile" \) -print0 | while IFS= read -r -d '' file; do
+    sed_i \
         -e "s/{{MCP_NAME}}/$NAME/g" \
         -e "s/{{MCP_SLUG}}/$MCP_SLUG/g" \
         -e "s/{{MCP_DESCRIPTION}}/$DESCRIPTION/g" \
-        {} +
-else
-    find "$OUTPUT_DIR" -type f \( -name "*.py" -o -name "*.ts" -o -name "*.json" -o -name "*.toml" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" -o -name "*.example" -o -name "*.cfg" -o -name "Dockerfile" \) -exec sed -i \
-        -e "s/{{MCP_NAME}}/$NAME/g" \
-        -e "s/{{MCP_SLUG}}/$MCP_SLUG/g" \
-        -e "s/{{MCP_DESCRIPTION}}/$DESCRIPTION/g" \
-        {} +
-fi
+        "$file"
+done
 
 # --- Auth Setup ---
 
@@ -172,12 +179,12 @@ if [[ "$AUTH" == "apikey" ]]; then
         cp "$REPO_ROOT/shared/python/auth.py" "$OUTPUT_DIR/src/auth.py"
         # Uncomment API key env vars in .env.example
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# MCP_API_KEYS=/MCP_API_KEYS=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# MCP_API_KEYS=/MCP_API_KEYS=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     elif [[ "$LANG" == "typescript" ]]; then
         cp "$REPO_ROOT/shared/typescript/auth.ts" "$OUTPUT_DIR/src/auth.ts"
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# MCP_API_KEYS=/MCP_API_KEYS=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# MCP_API_KEYS=/MCP_API_KEYS=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     fi
 
@@ -190,20 +197,20 @@ elif [[ "$AUTH" == "supabase" ]]; then
         echo "PyJWT>=2.8.0" >> "$OUTPUT_DIR/requirements.txt"
         # Uncomment Supabase env vars
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_JWT_SECRET=/SUPABASE_JWT_SECRET=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_JWT_SECRET=/SUPABASE_JWT_SECRET=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     elif [[ "$LANG" == "typescript" ]]; then
         cp "$REPO_ROOT/shared/typescript/auth.ts" "$OUTPUT_DIR/src/auth.ts"
         # Add jose to package.json dependencies via sed
         if [[ -f "$OUTPUT_DIR/package.json" ]]; then
-            sed -i 's/"zod": "^3.23.0"/"jose": "^5.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add jose dependency. Run: npm install jose"
+            sed_i 's/"zod": "^3.23.0"/"jose": "^5.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add jose dependency. Run: npm install jose"
         fi
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_JWT_SECRET=/SUPABASE_JWT_SECRET=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_JWT_SECRET=/SUPABASE_JWT_SECRET=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     fi
 fi
@@ -218,18 +225,18 @@ if [[ "$DB" == "supabase" ]]; then
         echo "supabase>=2.0.0" >> "$OUTPUT_DIR/requirements.txt"
         # Ensure env vars are uncommented
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     elif [[ "$LANG" == "typescript" ]]; then
         cp "$REPO_ROOT/shared/typescript/supabase-client.ts" "$OUTPUT_DIR/src/supabase-client.ts"
         # Add @supabase/supabase-js to package.json dependencies via sed
         if [[ -f "$OUTPUT_DIR/package.json" ]]; then
-            sed -i 's/"zod": "^3.23.0"/"@supabase\/supabase-js": "^2.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add @supabase/supabase-js. Run: npm install @supabase/supabase-js"
+            sed_i 's/"zod": "^3.23.0"/"@supabase\/supabase-js": "^2.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add @supabase/supabase-js. Run: npm install @supabase/supabase-js"
         fi
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
-            sed -i${SED_SUFFIX:-} 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+            sed_i 's/^# SUPABASE_SERVICE_ROLE_KEY=/SUPABASE_SERVICE_ROLE_KEY=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
         fi
     fi
 
@@ -257,7 +264,7 @@ volumes:
 PGEOF
 
         # Add depends_on to the mcp-server service
-        sed -i${SED_SUFFIX:-} '/restart: always/a\    depends_on:\n      - db' "$OUTPUT_DIR/docker-compose.yml" 2>/dev/null || true
+        sed_i '/restart: always/a\    depends_on:\n      - db' "$OUTPUT_DIR/docker-compose.yml" 2>/dev/null || true
     fi
 
     if [[ "$LANG" == "python" ]]; then
@@ -266,14 +273,14 @@ PGEOF
     elif [[ "$LANG" == "typescript" ]]; then
         # Add pg to package.json dependencies via sed
         if [[ -f "$OUTPUT_DIR/package.json" ]]; then
-            sed -i 's/"zod": "^3.23.0"/"pg": "^8.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add pg. Run: npm install pg"
-            sed -i 's/"typescript": "^5.5.0"/"@types\/pg": "^8.0.0",\n    "typescript": "^5.5.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || true
+            sed_i 's/"zod": "^3.23.0"/"pg": "^8.0.0",\n    "zod": "^3.23.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || warn "Could not auto-add pg. Run: npm install pg"
+            sed_i 's/"typescript": "^5.5.0"/"@types\/pg": "^8.0.0",\n    "typescript": "^5.5.0"/' "$OUTPUT_DIR/package.json" 2>/dev/null || true
         fi
     fi
 
     # Uncomment DATABASE_URL in .env.example
     if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
-        sed -i${SED_SUFFIX:-} 's/^# DATABASE_URL=/DATABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
+        sed_i 's/^# DATABASE_URL=/DATABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
     fi
 fi
 
@@ -291,6 +298,15 @@ fi
 if [[ "$SEPARATE_REPO" == true ]]; then
     info "Initializing as standalone git repository..."
     (cd "$OUTPUT_DIR" && git init && git add . && git commit -m "Initial MCP scaffold: $NAME")
+fi
+
+# --- Register in MCP Registry ---
+
+REGISTER_SCRIPT="$REPO_ROOT/scripts/register-mcp.sh"
+if [[ -x "$REGISTER_SCRIPT" ]]; then
+    REGISTER_ARGS=(--name "$NAME" --slug "$MCP_SLUG" --lang "$LANG" --tier "$TIER" --auth "$AUTH" --db "$DB" --description "$DESCRIPTION")
+    [[ "$SEPARATE_REPO" == true ]] && REGISTER_ARGS+=(--separate-repo)
+    "$REGISTER_SCRIPT" "${REGISTER_ARGS[@]}" || true
 fi
 
 # --- Done ---

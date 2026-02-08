@@ -1,43 +1,75 @@
-# Terminal Agent Tasks
+# Terminal / Coding Agent Tasks
 
-Tasks that can be done by a terminal-based AI agent in future sessions.
+Large coding tasks suitable for delegation to the Claude coding agent (branch-based workflow).
 
-## Post-Setup Tasks (After Arman Completes Browser Tasks)
+## Task 1: MCP Registry System
 
-### After Cloudflare Account is Ready
-- [ ] Run `wrangler deploy` in `examples/meta-tag-checker/` to test Cloudflare deployment
-- [ ] Run `wrangler deploy` in `examples/pdf-tools/` to test with API key auth
-- [ ] Set secrets via `wrangler secret put MCP_API_KEYS` for authenticated MCPs
-- [ ] Verify MCP endpoints respond correctly with curl tests
+**Branch from:** `main`
+**Priority:** High
 
-### After VPS is Ready
-- [ ] SSH into VPS and verify Coolify is running
-- [ ] Deploy bug-tracker example via `docker compose up -d --build`
-- [ ] Deploy virtual-tables example via `docker compose up -d --build`
-- [ ] Test health endpoints and MCP endpoints with curl
-- [ ] Install and configure Hostinger MCP server if API token is available
+**Goal:** Build a complete MCP registry system that tracks all deployed MCPs in a Supabase Postgres table.
 
-### Generator Testing
-- [ ] Test the generator with all 4 template combinations:
-  ```bash
-  ./generators/create-mcp.sh --name "Test Python CF" --lang python --tier cloudflare --auth none
-  ./generators/create-mcp.sh --name "Test TS CF" --lang typescript --tier cloudflare --auth apikey
-  ./generators/create-mcp.sh --name "Test Python VPS" --lang python --tier vps --auth supabase --db supabase
-  ./generators/create-mcp.sh --name "Test TS VPS" --lang typescript --tier vps --auth supabase --db postgres
-  ```
-- [ ] Verify generated MCPs have correct placeholder replacements
-- [ ] Verify auth and DB modules are correctly copied
-- [ ] Clean up test MCPs from `mcps/` directory
+**Requirements:**
+1. **Supabase migration** — Create the `mcp_registry` table (see schema below)
+2. **Generator integration** — Update `create-mcp.sh` to call a registration script after scaffolding
+3. **Registration script** — `scripts/register-mcp.sh` that inserts/updates the registry via Supabase API
+4. **Status update script** — `scripts/update-mcp-status.sh` for marking MCPs as deployed/active/inactive
+5. **List script** — `scripts/list-mcps.sh` to query and display all registered MCPs
 
-### First Real MCP
-- [ ] Use the generator to scaffold the first real client MCP
-- [ ] Add custom tools based on client requirements
-- [ ] Deploy and test end-to-end
+**Table schema:**
+```sql
+CREATE TABLE mcp_registry (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    language TEXT NOT NULL CHECK (language IN ('python', 'typescript')),
+    tier TEXT NOT NULL CHECK (tier IN ('cloudflare', 'vps')),
+    auth_type TEXT NOT NULL CHECK (auth_type IN ('none', 'apikey', 'supabase')),
+    db_type TEXT NOT NULL DEFAULT 'none' CHECK (db_type IN ('none', 'supabase', 'postgres')),
+    endpoint_url TEXT,
+    status TEXT NOT NULL DEFAULT 'scaffolded' CHECK (status IN ('scaffolded', 'developing', 'deployed', 'active', 'inactive', 'deprecated')),
+    repo_url TEXT,
+    is_separate_repo BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deployed_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'
+);
+```
 
-## Enhancement Ideas (Future)
+**Deliverables:**
+- SQL migration file
+- Updated `create-mcp.sh`
+- `scripts/register-mcp.sh`
+- `scripts/update-mcp-status.sh`
+- `scripts/list-mcps.sh`
 
-- [ ] Add a `registry.json` file that tracks all deployed MCPs
-- [ ] Create a `deploy.sh` helper script that handles both Cloudflare and Docker deployments
-- [ ] Add GitHub Actions CI/CD for automatic deployment on push
-- [ ] Add a simple health-check monitoring script that pings all MCP endpoints
-- [ ] Consider adding rate limiting middleware to the shared utilities
+---
+
+## Task 2: CI/CD Pipeline
+
+**Branch from:** `main`
+**Priority:** Low (after first successful manual deployments)
+
+**Goal:** GitHub Actions workflows for auto-deploying MCPs.
+
+**Requirements:**
+1. Cloudflare Workers deploy action (on push to `mcps/{name}/` for CF-tier MCPs)
+2. Docker build + push for VPS-tier MCPs
+3. Registry status update after successful deploy
+
+---
+
+## Task 3: Deploy Helper Script
+
+**Branch from:** `main`
+**Priority:** Medium
+
+**Goal:** A unified `scripts/deploy-mcp.sh` that handles both CF and VPS deployments.
+
+**Requirements:**
+1. Auto-detect tier from the MCP's config (wrangler.toml = CF, docker-compose.yml = VPS)
+2. For CF: run `wrangler deploy`
+3. For VPS: build Docker image, push to registry, trigger Coolify redeploy
+4. Update the MCP registry status after successful deploy

@@ -12,22 +12,20 @@ Last updated: 2026-02-08
 - All 5 architectural decisions resolved (see `ARMAN_DECISIONS.md`)
 - MCP Registry: `mcp_registry` table + RLS in Supabase (`automation-matrix`), scripts, generator auto-registers
 - GitHub: default branch → `main`, old branch deleted
-- Cloudflare: account active (ID: `e37857a87af22b3b3d00e7aebadcf674`, subdomain: `arman-e37.workers.dev`), `wrangler login` done
-- VPS: Hostinger provisioned (Ubuntu 24.04 + Docker + Coolify, IP: `191.101.15.190`), SSH key auth configured
-- Coolify: onboarded, API token generated, MCP tool configured in IDE
-- Hostinger MCP tool configured in IDE
-- All credentials saved to `.env`
+- Cloudflare: account active, `wrangler login` done
+- VPS: Hostinger provisioned (Ubuntu 24.04 + Docker + Coolify, IP: `191.101.15.190`), SSH key auth
+- Coolify: onboarded, API token, MCP tool in IDE
+- Hostinger MCP tool in IDE
+- DNS wildcard: `*.mcp.aimatrx.com → 191.101.15.190` ✅
+- Supabase: URL + anon key in `.env`
+- All credentials centralized in `.env`
 
-## 🔲 Infrastructure (Browser/Human Required)
+## 🔲 Remaining
 
-- [ ] **DNS wildcard** — `*.mcp.aimatrx.com → 191.101.15.190` A record
-- [ ] **Supabase credentials** — service role key + JWT secret → `.env`
-
-## 🔲 First Deployments
-
+- [ ] **Supabase service role key + JWT secret** — must be copied from dashboard (not available via API)
 - [ ] Meta Tag Checker → Cloudflare (validates CF workflow)
 - [ ] Bug Tracker → VPS/Coolify (validates VPS workflow)
-- [ ] Verify endpoints with curl + configure MCP clients
+- [ ] Verify endpoints + configure MCP clients
 
 ## 🔲 Future
 

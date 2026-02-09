@@ -9,4 +9,6 @@ COPY src/ ./src/
 
 EXPOSE 8000
 
-CMD ["python", "-m", "src.server"]
+ENV PYTHONPATH=/app/src
+
+CMD ["python", "-m", "server"]

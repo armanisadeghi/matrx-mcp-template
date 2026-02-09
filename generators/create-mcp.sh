@@ -15,6 +15,7 @@ AUTH="apikey"
 DB="none"
 DESCRIPTION="An MCP server"
 SEPARATE_REPO=false
+AUTO_DEPLOY=false
 NAME=""
 LANG=""
 TIER=""
@@ -58,6 +59,7 @@ Options:
   --db <type>            Database: none | supabase | postgres (default: none)
   --description <desc>   MCP description (default: "An MCP server")
   --separate-repo        Initialize as a standalone git repo
+  --deploy               Auto-deploy to VPS after scaffolding (VPS tier only)
   --help                 Show this help message
 
 Examples:
@@ -117,6 +119,7 @@ while [[ $# -gt 0 ]]; do
         --db) DB="$2"; shift 2 ;;
         --description) DESCRIPTION="$2"; shift 2 ;;
         --separate-repo) SEPARATE_REPO=true; shift ;;
+        --deploy) AUTO_DEPLOY=true; shift ;;
         --help) usage ;;
         *) error "Unknown option: $1" ;;
     esac
@@ -162,7 +165,7 @@ cp -r "$TEMPLATE_DIR" "$OUTPUT_DIR"
 # --- Replace Placeholders ---
 
 info "Replacing placeholders..."
-find "$OUTPUT_DIR" -type f \( -name "*.py" -o -name "*.ts" -o -name "*.json" -o -name "*.toml" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" -o -name "*.example" -o -name "*.cfg" -o -name "Dockerfile" \) -print0 | while IFS= read -r -d '' file; do
+find "$OUTPUT_DIR" -type f \( -name "*.py" -o -name "*.ts" -o -name "*.json" -o -name "*.toml" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" -o -name "*.example" -o -name "*.cfg" -o -name "*.sh" -o -name "Dockerfile" \) -print0 | while IFS= read -r -d '' file; do
     sed_i \
         -e "s/{{MCP_NAME}}/$NAME/g" \
         -e "s/{{MCP_SLUG}}/$MCP_SLUG/g" \
@@ -193,8 +196,13 @@ elif [[ "$AUTH" == "supabase" ]]; then
 
     if [[ "$LANG" == "python" ]]; then
         cp "$REPO_ROOT/shared/python/auth.py" "$OUTPUT_DIR/src/auth.py"
-        # Add PyJWT to requirements
-        echo "PyJWT>=2.8.0" >> "$OUTPUT_DIR/requirements.txt"
+        # Add PyJWT to dependencies
+        if [[ "$TIER" == "cloudflare" ]]; then
+            # Python-CF uses pyproject.toml (no version specifiers in CF deps)
+            sed_i 's/"fastapi",/"fastapi",\n    "pyjwt",/' "$OUTPUT_DIR/pyproject.toml" 2>/dev/null || warn "Could not auto-add pyjwt to pyproject.toml"
+        else
+            echo "PyJWT>=2.8.0" >> "$OUTPUT_DIR/requirements.txt"
+        fi
         # Uncomment Supabase env vars
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
             sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
@@ -222,7 +230,12 @@ if [[ "$DB" == "supabase" ]]; then
 
     if [[ "$LANG" == "python" ]]; then
         cp "$REPO_ROOT/shared/python/supabase_client.py" "$OUTPUT_DIR/src/supabase_client.py"
-        echo "supabase>=2.0.0" >> "$OUTPUT_DIR/requirements.txt"
+        # Add supabase client dependency
+        if [[ "$TIER" == "cloudflare" ]]; then
+            sed_i 's/"fastapi",/"fastapi",\n    "supabase",/' "$OUTPUT_DIR/pyproject.toml" 2>/dev/null || warn "Could not auto-add supabase to pyproject.toml"
+        else
+            echo "supabase>=2.0.0" >> "$OUTPUT_DIR/requirements.txt"
+        fi
         # Ensure env vars are uncommented
         if [[ -f "$OUTPUT_DIR/.env.example" ]]; then
             sed_i 's/^# SUPABASE_URL=/SUPABASE_URL=/' "$OUTPUT_DIR/.env.example" 2>/dev/null || true
@@ -268,6 +281,7 @@ PGEOF
     fi
 
     if [[ "$LANG" == "python" ]]; then
+        # Postgres only valid for VPS tier (validated above), so always requirements.txt
         echo "psycopg2-binary>=2.9.0" >> "$OUTPUT_DIR/requirements.txt"
         echo "sqlalchemy>=2.0.0" >> "$OUTPUT_DIR/requirements.txt"
     elif [[ "$LANG" == "typescript" ]]; then
@@ -291,6 +305,36 @@ if [[ "$LANG" == "python" ]]; then
     cp "$REPO_ROOT/shared/python/logging_config.py" "$OUTPUT_DIR/src/logging_config.py"
 elif [[ "$LANG" == "typescript" ]]; then
     cp "$REPO_ROOT/shared/typescript/logging.ts" "$OUTPUT_DIR/src/logging.ts"
+fi
+
+# --- VPS Deploy Script ---
+
+if [[ "$TIER" == "vps" ]]; then
+    info "Adding VPS deploy script..."
+
+    # Determine MCP domain
+    MCP_DOMAIN_BASE="${MCP_DOMAIN_BASE:-mcp.aimatrx.com}"
+    MCP_DOMAIN="https://${MCP_SLUG}.${MCP_DOMAIN_BASE}"
+
+    # Copy deploy script
+    cp "$TEMPLATES_DIR/deploy-vps.sh" "$OUTPUT_DIR/deploy-vps.sh"
+    chmod +x "$OUTPUT_DIR/deploy-vps.sh"
+
+    # Copy .env.deploy.example
+    cp "$TEMPLATES_DIR/env.deploy.example" "$OUTPUT_DIR/.env.deploy.example"
+
+    # Replace placeholders in deploy script
+    sed_i \
+        -e "s|{{MCP_SLUG}}|$MCP_SLUG|g" \
+        -e "s|{{MCP_NAME}}|$NAME|g" \
+        -e "s|{{MCP_DOMAIN}}|$MCP_DOMAIN|g" \
+        "$OUTPUT_DIR/deploy-vps.sh"
+
+    # Ensure deploy files are in .gitignore (templates already include them,
+    # but this covers cases where .gitignore was manually created)
+    if [[ -f "$OUTPUT_DIR/.gitignore" ]]; then
+        grep -q '.coolify-uuid' "$OUTPUT_DIR/.gitignore" 2>/dev/null || echo -e "\n# Deploy state\n.env.deploy\n.coolify-uuid" >> "$OUTPUT_DIR/.gitignore"
+    fi
 fi
 
 # --- Separate Repo ---
@@ -323,12 +367,18 @@ echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo ""
 
-if [[ "$LANG" == "python" ]]; then
+if [[ "$LANG" == "python" && "$TIER" == "cloudflare" ]]; then
+    echo "  1. cd $OUTPUT_DIR"
+    echo "  2. cp .env.example .env && edit .env"
+    echo "  3. uv sync  (install Python deps via uv)"
+    echo "  4. Add your tools in src/tools/"
+    echo "  5. uv run pywrangler dev  (local dev server)"
+elif [[ "$LANG" == "python" ]]; then
     echo "  1. cd $OUTPUT_DIR"
     echo "  2. cp .env.example .env && edit .env"
     echo "  3. pip install -r requirements.txt"
     echo "  4. Add your tools in src/tools/"
-    echo "  5. python -m src.server"
+    echo "  5. python -m server  (with PYTHONPATH=src)"
 else
     echo "  1. cd $OUTPUT_DIR"
     echo "  2. cp .env.example .env && edit .env"
@@ -339,12 +389,30 @@ fi
 
 echo ""
 
-if [[ "$TIER" == "cloudflare" ]]; then
-    echo -e "  ${CYAN}Deploy:${NC} wrangler deploy"
+if [[ "$TIER" == "cloudflare" && "$LANG" == "python" ]]; then
+    echo -e "  ${CYAN}Deploy:${NC} uv run pywrangler deploy"
+    echo -e "  ${CYAN}URL:${NC}    https://${MCP_SLUG}.your-account.workers.dev/mcp"
+    echo -e "  ${YELLOW}Note:${NC}  Python CF Workers with external packages require account access (currently in beta)"
+elif [[ "$TIER" == "cloudflare" ]]; then
+    echo -e "  ${CYAN}Deploy:${NC} npx wrangler deploy"
     echo -e "  ${CYAN}URL:${NC}    https://${MCP_SLUG}.your-account.workers.dev/mcp"
 else
-    echo -e "  ${CYAN}Deploy:${NC} docker compose up --build  (or push to GitHub for Coolify auto-deploy)"
-    echo -e "  ${CYAN}URL:${NC}    https://${MCP_SLUG}.mcp.yourdomain.com/mcp"
+    echo ""
+    echo -e "  ${CYAN}First deploy:${NC}  ./deploy-vps.sh --create"
+    echo -e "  ${CYAN}Redeploy:${NC}      ./deploy-vps.sh"
+    echo -e "  ${CYAN}Status:${NC}        ./deploy-vps.sh --status"
+    echo -e "  ${CYAN}Logs:${NC}          ./deploy-vps.sh --logs"
+    echo -e "  ${CYAN}URL:${NC}           https://${MCP_SLUG}.${MCP_DOMAIN_BASE:-mcp.aimatrx.com}/mcp"
 fi
 
 echo ""
+
+# --- Auto Deploy (VPS only) ---
+
+if [[ "$AUTO_DEPLOY" == true && "$TIER" == "vps" ]]; then
+    echo -e "${CYAN}Auto-deploying to VPS...${NC}"
+    echo ""
+    (cd "$OUTPUT_DIR" && ./deploy-vps.sh --create)
+elif [[ "$AUTO_DEPLOY" == true && "$TIER" == "cloudflare" ]]; then
+    warn "Auto-deploy not yet supported for Cloudflare tier. Use the deploy command above."
+fi

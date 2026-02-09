@@ -1,5 +1,7 @@
 # AI Matrx MCP Factory — Complete Implementation Guide
 
+DO NOT Make updates to this document. It is intended to hold Arman's initial ideas, even if they were later changed.
+
 ## Purpose
 
 This document contains all final decisions, architecture, and step-by-step instructions for building the AI Matrx MCP Factory system. It is designed to be consumed by a cloud-based AI agent that will implement everything.

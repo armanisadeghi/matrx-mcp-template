@@ -1,5 +1,5 @@
 -- MCP Registry: Tracks all deployed MCP servers
--- Applied to: ai-matrix Supabase project (ukmzzfhhstpvxrdmtkdt)
+-- Applied to: automation-matrix Supabase project (txzxabzwovsujtloxrus)
 -- Date: 2026-02-08
 
 CREATE TABLE IF NOT EXISTS public.mcp_registry (

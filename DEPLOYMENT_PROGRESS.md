@@ -30,10 +30,12 @@ The ONLY custom code should be the tool functions. Everything else must come fro
 - **Managed by**: Coolify (application UUID: `kwk404c48cokokwoos4woo84`)
 - **Image**: `localhost:5000/seo-tools-python-vps:latest` (private registry)
 
-### Python + Cloudflare: BLOCKED BY PLATFORM
+### Python + Cloudflare: EXPERIMENTAL (Not Production-Ready)
 - **Location**: `mcps/seo-tools-python-cf/`
-- **Status**: Code correct (WorkerEntrypoint + FastAPI + ASGI pattern), but CF API rejects: "You cannot yet deploy Python Workers that depend on packages"
-- **Recommendation**: Use Python-VPS instead. Drop or defer the Python-CF template.
+- **Template**: `generators/templates/python-cloudflare/` — retained, architecturally correct
+- **Status**: Cloudflare platform rejects deployment: *"You cannot yet deploy Python Workers that depend on packages"*
+- **Generator gate**: `create-mcp.sh` shows experimental warning + confirmation prompt when `--lang python --tier cloudflare` is used
+- **Recommendation**: Use `--tier vps` for all production Python MCPs
 
 ---
 
@@ -145,10 +147,11 @@ to the repo root `.env` for `COOLIFY_API_TOKEN`. Template values are pre-filled 
 - `wrangler.toml` — DO bindings, sqlite migrations, nodejs_compat
 - `package.json` — agents, @modelcontextprotocol/sdk, zod
 
-### `generators/templates/python-cloudflare/`
+### `generators/templates/python-cloudflare/` *(EXPERIMENTAL)*
 - `src/server.py` — WorkerEntrypoint + FastAPI + FastMCP ASGI
 - `wrangler.toml` — python_workers compat, observability
 - `pyproject.toml` — fastmcp, fastapi deps
+- `README.md` — Includes experimental banner and platform status note
 
 ### `generators/templates/typescript-vps/`
 - `src/index.ts` — HTTP server with StreamableHTTPServerTransport, full session management
@@ -170,7 +173,7 @@ to the repo root `.env` for `COOLIFY_API_TOKEN`. Template values are pre-filled 
 
 ## Known Issues (Still Open)
 
-1. **Python CF Workers with packages not available** — CF platform limitation. Recommend Python-VPS instead.
+1. **Python CF Workers with packages not available** — CF platform limitation. Template retained as experimental; generator now gates with confirmation prompt. Use Python-VPS instead.
 2. **`logging.ts` uses `process.env` in CF Workers** (Bug #7) — Needs CF-specific version.
 3. **`.env` sourcing bug in generator** (Bug #9) — Unquoted value interpreted as command.
 

@@ -205,21 +205,54 @@ export function registerTools(server: McpServer) {
 
 ## Testing Tools Locally
 
-### Python
+### Python (VPS)
 ```bash
-python -m src.server
-# Server runs at http://localhost:8000/mcp
+cd mcps/your-mcp/
+pip install -r requirements.txt
+PYTHONPATH=src python -m server
+# Server at http://localhost:8000
 
-# Test with curl:
-curl -X POST http://localhost:8000/mcp \
+# Health check:
+curl http://localhost:8000/
+
+# Initialize + call tool (MCP requires a session):
+curl -s -D /tmp/h.txt -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"my_tool","arguments":{"input":"test"}},"id":1}'
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+
+SESSION=$(grep -i mcp-session-id /tmp/h.txt | awk '{print $2}' | tr -d '\r')
+curl -s -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: $SESSION" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"my_tool","arguments":{"input":"test"}}}'
 ```
 
-### TypeScript
+### Python (Cloudflare — Experimental)
 ```bash
-npm run dev
-# Test same way with curl
+cd mcps/your-mcp/
+uv sync && uv run pywrangler dev
+# Server at http://localhost:8787/mcp
+```
+
+### TypeScript (VPS)
+```bash
+cd mcps/your-mcp/
+npm install && npm run dev
+# Server at http://localhost:8000 — same curl flow as Python above
+```
+
+### TypeScript (Cloudflare)
+```bash
+cd mcps/your-mcp/
+npm install && npx wrangler dev
+# Server at http://localhost:8787/mcp
+```
+
+### Docker (VPS templates)
+```bash
+docker build -t test-mcp . && docker run -p 8000:8000 -e MCP_NAME="Test" test-mcp
 ```
 
 ## Error Handling

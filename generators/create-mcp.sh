@@ -140,6 +140,33 @@ if [[ "$DB" == "postgres" && "$TIER" == "cloudflare" ]]; then
     error "Cannot use --db postgres with --tier cloudflare (no Docker support). Use --tier vps instead."
 fi
 
+# --- Python + Cloudflare: Experimental ---
+if [[ "$LANG" == "python" && "$TIER" == "cloudflare" ]]; then
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  EXPERIMENTAL: Python + Cloudflare Workers${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  Cloudflare Python Workers with external packages (FastMCP, FastAPI)"
+    echo -e "  are ${RED}not yet generally available${NC} on the Cloudflare platform."
+    echo ""
+    echo -e "  The template code is architecturally correct, but deployment will fail"
+    echo -e "  unless your Cloudflare account has been granted Python packages access."
+    echo ""
+    echo -e "  ${CYAN}Recommendation:${NC} Use ${GREEN}--tier vps${NC} for Python MCPs instead."
+    echo -e "  VPS deployment is fully automated and production-ready."
+    echo ""
+    echo -n "  Continue anyway? (y/N): "
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+        echo ""
+        echo -e "  Aborted. Rerun with ${GREEN}--tier vps${NC} for a production-ready Python MCP."
+        echo ""
+        exit 0
+    fi
+    echo ""
+fi
+
 MCP_SLUG=$(slugify "$NAME")
 TEMPLATE_DIR="$TEMPLATES_DIR/${LANG}-${TIER}"
 OUTPUT_DIR="$REPO_ROOT/mcps/$MCP_SLUG"

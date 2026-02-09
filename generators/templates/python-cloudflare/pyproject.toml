@@ -1,0 +1,15 @@
+[project]
+name = "{{MCP_SLUG}}"
+version = "1.0.0"
+description = "{{MCP_DESCRIPTION}}"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp",
+    "fastapi",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+]

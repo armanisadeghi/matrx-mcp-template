@@ -68,6 +68,15 @@ export class Logger {
 }
 
 export function createLogger(mcpName: string, level?: LogLevel): Logger {
-  const envLevel = (process.env.LOG_LEVEL || level || "INFO").toUpperCase() as LogLevel;
-  return new Logger(mcpName, envLevel);
+  // Safe env access: process.env doesn't exist in CF Workers
+  let envLogLevel: string | undefined;
+  try {
+    if (typeof globalThis !== "undefined" && (globalThis as any).process?.env?.LOG_LEVEL) {
+      envLogLevel = (globalThis as any).process.env.LOG_LEVEL;
+    }
+  } catch {
+    // Ignore — CF Workers or other non-Node runtimes
+  }
+  const resolvedLevel = (envLogLevel || level || "INFO").toUpperCase() as LogLevel;
+  return new Logger(mcpName, resolvedLevel);
 }

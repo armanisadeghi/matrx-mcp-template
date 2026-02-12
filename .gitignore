@@ -40,3 +40,6 @@ mcps/
 
 # Matrx Ship config (contains API key)
 .matrx-ship.json
+.matrx.json
+.matrx-tools.conf
+.env-backups/

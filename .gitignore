@@ -37,3 +37,6 @@ Thumbs.db
 
 # Generated MCPs directory (each MCP may have its own repo)
 mcps/
+
+# Matrx Ship config (contains API key)
+.matrx-ship.json

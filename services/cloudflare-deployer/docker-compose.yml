@@ -1,0 +1,16 @@
+services:
+  cloudflare-deployer:
+    build:
+      context: ../..
+      dockerfile: services/cloudflare-deployer/Dockerfile
+    container_name: cloudflare-deployer
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - cloudflare-worker-projects:/data/workers
+
+volumes:
+  cloudflare-worker-projects:

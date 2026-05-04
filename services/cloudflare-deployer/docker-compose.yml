@@ -7,8 +7,15 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8080}:8080"
-    env_file:
-      - .env
+    environment:
+      - PORT=8080
+      - DEPLOYER_API_KEY=${DEPLOYER_API_KEY:-}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+      - CLOUDFLARE_DEFAULT_DOMAIN=${CLOUDFLARE_DEFAULT_DOMAIN:-}
+      - CLOUDFLARE_WORKERS_SUBDOMAIN=${CLOUDFLARE_WORKERS_SUBDOMAIN:-}
+      - DEPLOY_TIMEOUT_MS=${DEPLOY_TIMEOUT_MS:-300000}
+      - VERIFY_TIMEOUT_MS=${VERIFY_TIMEOUT_MS:-30000}
     volumes:
       - cloudflare-worker-projects:/data/workers
 

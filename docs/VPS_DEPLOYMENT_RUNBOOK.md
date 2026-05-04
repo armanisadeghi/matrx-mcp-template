@@ -53,7 +53,7 @@ VPS_USER=root
 
 # Coolify API
 COOLIFY_URL=http://191.101.15.190:8000
-COOLIFY_API_TOKEN="<redacted-coolify-api-token>"
+COOLIFY_API_TOKEN="<set-in-local-env-or-secret-manager>"
 
 # Coolify Project (MCP Factory)
 COOLIFY_PROJECT_UUID=hcw40ckwss4gkgwkckc004wc
@@ -62,8 +62,8 @@ COOLIFY_ENVIRONMENT=production
 
 # Docker Registry (on VPS only — not publicly exposed)
 REGISTRY_HOST=localhost:5000
-REGISTRY_USER=<redacted-registry-user>
-REGISTRY_PASS=<redacted-registry-pass>
+REGISTRY_USER="<set-in-local-env-or-secret-manager>"
+REGISTRY_PASS="<set-in-local-env-or-secret-manager>"
 ```
 
 ---
@@ -100,7 +100,7 @@ EOF
 
 ```bash
 ssh root@191.101.15.190 << EOF
-  docker login localhost:5000 -u <redacted-registry-user> -p <redacted-registry-pass>
+  echo "\${REGISTRY_PASS}" | docker login localhost:5000 -u "\${REGISTRY_USER}" --password-stdin
   docker push localhost:5000/${MCP_SLUG}:latest
 EOF
 ```
@@ -114,7 +114,7 @@ on the VPS itself (port bound to `127.0.0.1`), so no security exposure.
 ```bash
 MCP_SLUG="your-mcp-name"
 MCP_DOMAIN="https://${MCP_SLUG}.mcp.aimatrx.com"
-COOLIFY_TOKEN="<redacted-coolify-api-token>"
+COOLIFY_TOKEN="${COOLIFY_API_TOKEN}"
 COOLIFY_URL="http://191.101.15.190:8000"
 
 curl -s -X POST \
@@ -354,5 +354,5 @@ ssh root@191.101.15.190 "curl -s localhost:5000/v2/<image-name>/tags/list"
 
 # Registry runs as Coolify service (UUID: l044ccwcg8484g8gcgww4kkk)
 # Config: registry:3 image, port 127.0.0.1:5000:5000
-# Auth: <redacted-registry-user> / <redacted-registry-pass>
+# Auth: stored outside git in local environment or secret manager
 ```

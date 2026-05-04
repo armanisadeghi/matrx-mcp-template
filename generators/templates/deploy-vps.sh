@@ -32,8 +32,8 @@ VPS_USER="${VPS_USER:-root}"
 VPS_MCP_DIR="/opt/mcps/${MCP_SLUG}"
 
 REGISTRY_HOST="${REGISTRY_HOST:-localhost:5000}"
-REGISTRY_USER="${REGISTRY_USER:-<redacted-registry-user>}"
-REGISTRY_PASS="${REGISTRY_PASS:-<redacted-registry-pass>}"
+REGISTRY_USER="${REGISTRY_USER:-}"
+REGISTRY_PASS="${REGISTRY_PASS:-}"
 
 COOLIFY_URL="${COOLIFY_URL:-http://191.101.15.190:8000}"
 COOLIFY_TOKEN="${COOLIFY_TOKEN:-}"
@@ -73,6 +73,8 @@ warn() { echo -e "${YELLOW}!${NC} $1"; }
 
 check_prerequisites() {
     [[ -z "$COOLIFY_TOKEN" ]] && error "COOLIFY_TOKEN not set. Add it to .env.deploy or the repo root .env file."
+    [[ -z "$REGISTRY_USER" ]] && error "REGISTRY_USER not set. Add it to .env.deploy or your environment."
+    [[ -z "$REGISTRY_PASS" ]] && error "REGISTRY_PASS not set. Add it to .env.deploy or your environment."
     command -v ssh >/dev/null 2>&1 || error "ssh not found"
     command -v rsync >/dev/null 2>&1 || error "rsync not found"
     command -v curl >/dev/null 2>&1 || error "curl not found"

@@ -44,7 +44,7 @@ The ONLY custom code should be the tool functions. Everything else must come fro
 ### Private Docker Registry
 - **Managed by**: Coolify service (UUID: `l044ccwcg8484g8gcgww4kkk`)
 - **Access**: `localhost:5000` on VPS (port mapped to host 127.0.0.1 only — not publicly exposed)
-- **Auth**: username `<redacted-registry-user>`, password `<redacted-registry-pass>`
+- **Auth**: stored outside git in local `.env.deploy` files or secret manager
 - **Image**: `registry:3`
 
 ### VPS Deployment Pipeline: AUTOMATED
@@ -188,7 +188,7 @@ to the repo root `.env` for `COOLIFY_API_TOKEN`. Template values are pre-filled 
 | Resource | Value |
 |----------|-------|
 | Coolify URL | `http://191.101.15.190:8000` |
-| Coolify API Token | `<redacted-coolify-api-token>` |
+| Coolify API Token | stored outside git |
 | Coolify Project UUID | `hcw40ckwss4gkgwkckc004wc` |
 | Coolify Server UUID | `sggkws4cgwoo0kckk4oogcss` |
 | Coolify Environment | `production` |

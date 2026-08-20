@@ -81,6 +81,38 @@ build_and_push() {
     docker push "$IMAGE_URI"
 }
 
+verify_image_scan() {
+    local critical_count high_count
+    info "Waiting for ECR vulnerability scan"
+    # Scan-on-push can take a moment to create its scan record. Starting the
+    # same image explicitly is idempotent for an already-running scan and
+    # prevents the waiter from failing with ScanNotFoundException.
+    aws ecr start-image-scan \
+        --repository-name "$ECR_REPOSITORY" \
+        --image-id "imageTag=${IMAGE_TAG}" \
+        --region "$AWS_REGION" >/dev/null 2>&1 || true
+    aws ecr wait image-scan-complete \
+        --repository-name "$ECR_REPOSITORY" \
+        --image-id "imageTag=${IMAGE_TAG}" \
+        --region "$AWS_REGION"
+    critical_count="$(aws ecr describe-image-scan-findings \
+        --repository-name "$ECR_REPOSITORY" \
+        --image-id "imageTag=${IMAGE_TAG}" \
+        --region "$AWS_REGION" \
+        --query 'imageScanFindings.findingSeverityCounts.CRITICAL' --output text)"
+    high_count="$(aws ecr describe-image-scan-findings \
+        --repository-name "$ECR_REPOSITORY" \
+        --image-id "imageTag=${IMAGE_TAG}" \
+        --region "$AWS_REGION" \
+        --query 'imageScanFindings.findingSeverityCounts.HIGH' --output text)"
+    [[ "$critical_count" == "None" ]] && critical_count=0
+    [[ "$high_count" == "None" ]] && high_count=0
+    if (( critical_count > 0 || high_count > 0 )); then
+        error "ECR scan blocked deployment: ${critical_count} critical and ${high_count} high findings"
+    fi
+    info "ECR scan passed with zero critical/high findings"
+}
+
 write_app_runner_config() {
     source_file="$(mktemp)"
     instance_file="$(mktemp)"
@@ -201,6 +233,7 @@ deploy() {
     image_tag
     ensure_repository
     build_and_push
+    verify_image_scan
     write_app_runner_config
 
     local service_arn

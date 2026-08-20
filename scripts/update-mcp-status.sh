@@ -1,88 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ============================================================================
-# Update the status of an MCP in the registry
-# Usage: ./scripts/update-mcp-status.sh --slug my-mcp --status active [--endpoint https://...]
-# ============================================================================
-
+# Updates endpoint and lifecycle in the canonical East tool.mcp_server catalog.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-
-# --- Colors ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# --- Load env if available ---
-if [[ -f "$REPO_ROOT/.env" ]]; then
-    set -a
-    source "$REPO_ROOT/.env"
-    set +a
-fi
-
-# --- Validate ---
-if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
-    echo -e "${RED}Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.${NC}"
+load_env_value() {
+    local key="$1" value
+    [[ -n "${!key:-}" || ! -f "$REPO_ROOT/.env" ]] && return
+    value="$(grep -m1 "^${key}=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2-)"
+    value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
+    printf -v "$key" '%s' "$value"; export "$key"
+}
+load_env_value SUPABASE_URL
+load_env_value SUPABASE_SERVICE_ROLE_KEY
+[[ -n "${SUPABASE_URL:-}" && -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]] || { echo "Supabase registry credentials are required" >&2; exit 1; }
+if [[ "$SUPABASE_URL" == *supabase.co* && "$SUPABASE_URL" != *brsgrqvjdzwihsvnfqkf* ]]; then
+    echo "Refusing to update an MCP outside canonical Supabase East." >&2
     exit 1
 fi
 
-# --- Parse Arguments ---
-SLUG=""
-STATUS=""
-ENDPOINT=""
-
+SLUG=""; STATUS=""; ENDPOINT=""
 while [[ $# -gt 0 ]]; do
-    case $1 in
+    case "$1" in
         --slug) SLUG="$2"; shift 2 ;;
         --status) STATUS="$2"; shift 2 ;;
         --endpoint) ENDPOINT="$2"; shift 2 ;;
-        *) echo -e "${RED}Unknown option: $1${NC}" >&2; exit 1 ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
+[[ -n "$SLUG" && -n "$STATUS" ]] || { echo "slug and status are required" >&2; exit 1; }
+case "$STATUS" in
+    scaffolded|developing) CATALOG_STATUS="coming_soon" ;;
+    deployed|active) CATALOG_STATUS="active" ;;
+    deprecated) CATALOG_STATUS="deprecated" ;;
+    *) echo "Unsupported status: $STATUS" >&2; exit 1 ;;
+esac
 
-if [[ -z "$SLUG" || -z "$STATUS" ]]; then
-    echo "Usage: update-mcp-status.sh --slug <slug> --status <status> [--endpoint <url>]"
-    echo ""
-    echo "Status values: scaffolded, developing, deployed, active, inactive, deprecated"
-    exit 1
-fi
+PAYLOAD="$(python3 - "$CATALOG_STATUS" "$ENDPOINT" <<'PY'
+import datetime, json, sys
+status, endpoint = sys.argv[1:]
+payload = {"status": status, "has_remote": bool(endpoint),
+           "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+if endpoint:
+    payload["endpoint_url"] = endpoint
+print(json.dumps(payload))
+PY
+)"
 
-# --- Build JSON payload ---
-PAYLOAD="{\"status\": \"$STATUS\""
-
-if [[ -n "$ENDPOINT" ]]; then
-    PAYLOAD="$PAYLOAD, \"endpoint_url\": \"$ENDPOINT\""
-fi
-
-if [[ "$STATUS" == "deployed" || "$STATUS" == "active" ]]; then
-    PAYLOAD="$PAYLOAD, \"deployed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
-fi
-
-PAYLOAD="$PAYLOAD}"
-
-# --- Update in Supabase ---
-RESPONSE=$(curl -s -w "\n%{http_code}" \
-    -X PATCH "${SUPABASE_URL}/rest/v1/mcp_registry?slug=eq.${SLUG}" \
+RESPONSE="$(curl --silent --write-out $'\n%{http_code}' \
+    -X PATCH "${SUPABASE_URL}/rest/v1/mcp_server?slug=eq.${SLUG}" \
     -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-    -H "Content-Type: application/json" \
-    -H "Prefer: return=representation" \
-    -d "$PAYLOAD" 2>/dev/null || echo -e "\n000")
-
-HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-BODY=$(echo "$RESPONSE" | head -n -1)
-
-if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-    echo -e "${GREEN}✓${NC} Updated ${SLUG} → status: ${STATUS}"
-    if [[ -n "$ENDPOINT" ]]; then
-        echo -e "  Endpoint: ${ENDPOINT}"
-    fi
-else
-    echo -e "${RED}Error: Failed to update ${SLUG} (HTTP $HTTP_CODE)${NC}"
-    if [[ -n "$BODY" ]]; then
-        echo "  Response: $BODY"
-    fi
-    exit 1
-fi
+    -H "Content-Type: application/json" -H "Content-Profile: tool" \
+    -H "Prefer: return=representation" -d "$PAYLOAD")"
+HTTP_CODE="$(printf '%s' "$RESPONSE" | tail -1)"
+BODY="$(printf '%s' "$RESPONSE" | sed '$d')"
+[[ "$HTTP_CODE" == "200" ]] || { echo "Registry update failed with HTTP ${HTTP_CODE}" >&2; exit 1; }
+[[ "$BODY" != "[]" ]] || { echo "No MCP catalog row matched ${SLUG}" >&2; exit 1; }
+echo "Updated ${SLUG} in tool.mcp_server"

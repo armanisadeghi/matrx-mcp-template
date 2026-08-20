@@ -1,47 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ============================================================================
-# Register an MCP in the Supabase registry
-# Called by create-mcp.sh after scaffolding, or manually.
-# Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in environment or .env
-# ============================================================================
-
+# Registers a generated MCP in the one canonical East catalog: tool.mcp_server.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+load_env_value() {
+    local key="$1" value
+    [[ -n "${!key:-}" || ! -f "$REPO_ROOT/.env" ]] && return
+    value="$(grep -m1 "^${key}=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2-)"
+    value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
+    printf -v "$key" '%s' "$value"; export "$key"
+}
+load_env_value SUPABASE_URL
+load_env_value SUPABASE_SERVICE_ROLE_KEY
 
-# --- Colors ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# --- Load env if available ---
-if [[ -f "$REPO_ROOT/.env" ]]; then
-    set -a
-    source "$REPO_ROOT/.env"
-    set +a
-fi
-
-# --- Validate ---
 if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
-    echo -e "${YELLOW}Warning: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set.${NC}"
-    echo "Registry update skipped. Set these in .env or environment to enable auto-registration."
-    exit 0  # Soft fail — don't block MCP creation
+    echo "Registry update skipped: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is unavailable."
+    exit 0
+fi
+if [[ "$SUPABASE_URL" == *supabase.co* && "$SUPABASE_URL" != *brsgrqvjdzwihsvnfqkf* ]]; then
+    echo "Refusing to register an MCP outside canonical Supabase East." >&2
+    exit 1
 fi
 
-# --- Parse Arguments ---
-NAME=""
-SLUG=""
-DESCRIPTION="An MCP server"
-LANG=""
-TIER=""
-AUTH="apikey"
-DB="none"
-SEPARATE_REPO="false"
-
+NAME=""; SLUG=""; DESCRIPTION="An MCP server"; LANG=""; TIER=""; AUTH="apikey"; DB="none"; SEPARATE_REPO="false"
 while [[ $# -gt 0 ]]; do
-    case $1 in
+    case "$1" in
         --name) NAME="$2"; shift 2 ;;
         --slug) SLUG="$2"; shift 2 ;;
         --description) DESCRIPTION="$2"; shift 2 ;;
@@ -50,48 +34,43 @@ while [[ $# -gt 0 ]]; do
         --auth) AUTH="$2"; shift 2 ;;
         --db) DB="$2"; shift 2 ;;
         --separate-repo) SEPARATE_REPO="true"; shift ;;
-        *) echo -e "${RED}Unknown option: $1${NC}" >&2; exit 1 ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
+[[ -n "$NAME" && -n "$SLUG" && -n "$LANG" && -n "$TIER" ]] || { echo "name, slug, lang, and tier are required" >&2; exit 1; }
 
-if [[ -z "$NAME" || -z "$SLUG" || -z "$LANG" || -z "$TIER" ]]; then
-    echo "Usage: register-mcp.sh --name <name> --slug <slug> --lang <lang> --tier <tier> [--auth <auth>] [--db <db>] [--description <desc>] [--separate-repo]"
-    exit 1
-fi
+case "$AUTH" in
+    apikey) AUTH_STRATEGY="api_key" ;;
+    supabase) AUTH_STRATEGY="bearer" ;;
+    none) AUTH_STRATEGY="none" ;;
+    *) echo "Unsupported auth strategy: $AUTH" >&2; exit 1 ;;
+esac
 
-# --- Build JSON payload ---
-PAYLOAD=$(cat <<EOF
-{
-    "name": "$NAME",
-    "slug": "$SLUG",
-    "description": "$DESCRIPTION",
-    "language": "$LANG",
-    "tier": "$TIER",
-    "auth_type": "$AUTH",
-    "db_type": "$DB",
-    "is_separate_repo": $SEPARATE_REPO,
-    "status": "scaffolded"
-}
-EOF
-)
+PAYLOAD="$(python3 - "$NAME" "$SLUG" "$DESCRIPTION" "$AUTH_STRATEGY" "$LANG" "$TIER" "$AUTH" "$DB" "$SEPARATE_REPO" <<'PY'
+import json, sys
+name, slug, description, strategy, language, tier, auth, database, separate = sys.argv[1:]
+print(json.dumps({
+    "name": name, "slug": slug, "vendor": "AI Matrx", "description": description,
+    "category": "developer", "transport": "http", "auth_strategy": strategy,
+    "has_remote": False, "has_local": False, "status": "coming_soon",
+    "metadata": {"managed_by": "matrx-mcp-factory", "language": language,
+                 "hosting_target": tier, "auth_type": auth, "database_mode": database,
+                 "separate_repository": separate == "true"},
+}))
+PY
+)"
 
-# --- Upsert to Supabase ---
-RESPONSE=$(curl -s -w "\n%{http_code}" \
-    -X POST "${SUPABASE_URL}/rest/v1/mcp_registry" \
+HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    -X POST "${SUPABASE_URL}/rest/v1/mcp_server" \
     -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-    -H "Content-Type: application/json" \
-    -H "Prefer: resolution=merge-duplicates" \
-    "$PAYLOAD" 2>/dev/null || echo -e "\n000")
+    -H "Content-Type: application/json" -H "Content-Profile: tool" -d "$PAYLOAD")"
 
-HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-BODY=$(echo "$RESPONSE" | head -n -1)
-
-if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-    echo -e "${GREEN}→${NC} Registered in MCP registry: ${SLUG}"
+if [[ "$HTTP_CODE" == "201" ]]; then
+    echo "Registered ${SLUG} in tool.mcp_server"
+elif [[ "$HTTP_CODE" == "409" ]]; then
+    echo "Registry row ${SLUG} already exists; it was not overwritten."
 else
-    echo -e "${YELLOW}Warning: Registry update failed (HTTP $HTTP_CODE). MCP was still created.${NC}"
-    if [[ -n "$BODY" ]]; then
-        echo "  Response: $BODY"
-    fi
+    echo "Registry update failed with HTTP ${HTTP_CODE}." >&2
+    exit 1
 fi

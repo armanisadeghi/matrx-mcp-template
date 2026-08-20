@@ -1,0 +1,8 @@
+{
+  "variables": {
+    "LOG_LEVEL": "INFO"
+  },
+  "secrets": {
+    "MCP_API_KEYS": "arn:aws:secretsmanager:us-east-1:123456789012:secret:replace-me"
+  }
+}

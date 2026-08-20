@@ -52,14 +52,14 @@ Usage:
 Required:
   --name <name>          Display name for the MCP (e.g., "Marketing SEO Tools")
   --lang <language>      Language: python | typescript
-  --tier <tier>          Deployment tier: cloudflare | vps
+  --tier <tier>          Deployment tier: cloudflare | vps | aws
 
 Options:
   --auth <type>          Auth type: none | apikey | supabase (default: apikey)
   --db <type>            Database: none | supabase | postgres (default: none)
   --description <desc>   MCP description (default: "An MCP server")
   --separate-repo        Initialize as a standalone git repo
-  --deploy               Auto-deploy to VPS after scaffolding (VPS tier only)
+  --deploy               Auto-deploy after scaffolding (VPS and AWS tiers)
   --help                 Show this help message
 
 Examples:
@@ -79,6 +79,15 @@ Examples:
     --auth supabase \\
     --db supabase \\
     --description "Bug tracking and management tools"
+
+  # AWS App Runner MCP with managed HTTPS and workload identity
+  ./generators/create-mcp.sh \
+    --name "Client Research Tools" \
+    --lang typescript \
+    --tier aws \
+    --auth supabase \
+    --db supabase \
+    --description "Research tools hosted on AWS App Runner"
 
   # Standalone repo for client delivery
   ./generators/create-mcp.sh \\
@@ -132,12 +141,16 @@ done
 [[ -z "$TIER" ]] && error "Missing required flag: --tier"
 
 [[ "$LANG" != "python" && "$LANG" != "typescript" ]] && error "Invalid --lang: must be 'python' or 'typescript'"
-[[ "$TIER" != "cloudflare" && "$TIER" != "vps" ]] && error "Invalid --tier: must be 'cloudflare' or 'vps'"
+[[ "$TIER" != "cloudflare" && "$TIER" != "vps" && "$TIER" != "aws" ]] && error "Invalid --tier: must be 'cloudflare', 'vps', or 'aws'"
 [[ "$AUTH" != "none" && "$AUTH" != "apikey" && "$AUTH" != "supabase" ]] && error "Invalid --auth: must be 'none', 'apikey', or 'supabase'"
 [[ "$DB" != "none" && "$DB" != "supabase" && "$DB" != "postgres" ]] && error "Invalid --db: must be 'none', 'supabase', or 'postgres'"
 
 if [[ "$DB" == "postgres" && "$TIER" == "cloudflare" ]]; then
     error "Cannot use --db postgres with --tier cloudflare (no Docker support). Use --tier vps instead."
+fi
+
+if [[ "$DB" == "postgres" && "$TIER" == "aws" ]]; then
+    error "Cannot use --db postgres with --tier aws because App Runner has no sidecar database. Use --db supabase or --db none."
 fi
 
 # --- Python + Cloudflare: Experimental ---
@@ -168,8 +181,15 @@ if [[ "$LANG" == "python" && "$TIER" == "cloudflare" ]]; then
 fi
 
 MCP_SLUG=$(slugify "$NAME")
-TEMPLATE_DIR="$TEMPLATES_DIR/${LANG}-${TIER}"
-OUTPUT_DIR="$REPO_ROOT/mcps/$MCP_SLUG"
+if [[ "$TIER" == "aws" ]]; then
+    # AWS App Runner consumes the same production container as the VPS tier.
+    # An AWS-specific stateless server overlay makes horizontal scaling safe.
+    TEMPLATE_DIR="$TEMPLATES_DIR/${LANG}-vps"
+else
+    TEMPLATE_DIR="$TEMPLATES_DIR/${LANG}-${TIER}"
+fi
+OUTPUT_ROOT="${MCP_FACTORY_OUTPUT_ROOT:-$REPO_ROOT/mcps}"
+OUTPUT_DIR="$OUTPUT_ROOT/$MCP_SLUG"
 
 [[ ! -d "$TEMPLATE_DIR" ]] && error "Template not found: $TEMPLATE_DIR"
 [[ -d "$OUTPUT_DIR" ]] && error "MCP already exists: $OUTPUT_DIR"
@@ -188,6 +208,16 @@ echo ""
 info "Copying template from ${LANG}-${TIER}..."
 mkdir -p "$(dirname "$OUTPUT_DIR")"
 cp -r "$TEMPLATE_DIR" "$OUTPUT_DIR"
+
+if [[ "$TIER" == "aws" ]]; then
+    rm -f "$OUTPUT_DIR/docker-compose.yml"
+    cp "$TEMPLATES_DIR/aws/README.md" "$OUTPUT_DIR/README.md"
+    if [[ "$LANG" == "python" ]]; then
+        cp "$TEMPLATES_DIR/aws/python-server.py" "$OUTPUT_DIR/src/server.py"
+    else
+        cp "$TEMPLATES_DIR/aws/typescript-index.ts" "$OUTPUT_DIR/src/index.ts"
+    fi
+fi
 
 # --- Replace Placeholders ---
 
@@ -364,6 +394,29 @@ if [[ "$TIER" == "vps" ]]; then
     fi
 fi
 
+# --- AWS App Runner Deploy Script ---
+
+if [[ "$TIER" == "aws" ]]; then
+    info "Adding AWS App Runner deploy script..."
+    cp "$TEMPLATES_DIR/deploy-aws.sh" "$OUTPUT_DIR/deploy-aws.sh"
+    cp "$TEMPLATES_DIR/aws-runtime.example.json" "$OUTPUT_DIR/.aws-runtime.example.json"
+    chmod +x "$OUTPUT_DIR/deploy-aws.sh"
+
+    sed_i \
+        -e "s|{{MCP_SLUG}}|$MCP_SLUG|g" \
+        -e "s|{{MCP_NAME}}|$NAME|g" \
+        "$OUTPUT_DIR/deploy-aws.sh"
+
+    if [[ -f "$OUTPUT_DIR/.gitignore" ]]; then
+        grep -q '.aws-runtime.json' "$OUTPUT_DIR/.gitignore" 2>/dev/null || echo -e "\n# AWS deploy inputs\n.aws-runtime.json" >> "$OUTPUT_DIR/.gitignore"
+    fi
+
+    if [[ "$LANG" == "typescript" ]]; then
+        info "Locking TypeScript dependencies for reproducible container builds..."
+        (cd "$OUTPUT_DIR" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null)
+    fi
+fi
+
 # --- Separate Repo ---
 
 if [[ "$SEPARATE_REPO" == true ]]; then
@@ -374,7 +427,7 @@ fi
 # --- Register in MCP Registry ---
 
 REGISTER_SCRIPT="$REPO_ROOT/scripts/register-mcp.sh"
-if [[ -x "$REGISTER_SCRIPT" ]]; then
+if [[ -x "$REGISTER_SCRIPT" && "${MCP_FACTORY_SKIP_REGISTRY:-false}" != "true" ]]; then
     REGISTER_ARGS=(--name "$NAME" --slug "$MCP_SLUG" --lang "$LANG" --tier "$TIER" --auth "$AUTH" --db "$DB" --description "$DESCRIPTION")
     [[ "$SEPARATE_REPO" == true ]] && REGISTER_ARGS+=(--separate-repo)
     "$REGISTER_SCRIPT" "${REGISTER_ARGS[@]}" || true
@@ -423,13 +476,20 @@ if [[ "$TIER" == "cloudflare" && "$LANG" == "python" ]]; then
 elif [[ "$TIER" == "cloudflare" ]]; then
     echo -e "  ${CYAN}Deploy:${NC} npx wrangler deploy"
     echo -e "  ${CYAN}URL:${NC}    https://${MCP_SLUG}.your-account.workers.dev/mcp"
-else
+elif [[ "$TIER" == "vps" ]]; then
     echo ""
     echo -e "  ${CYAN}First deploy:${NC}  ./deploy-vps.sh --create"
     echo -e "  ${CYAN}Redeploy:${NC}      ./deploy-vps.sh"
     echo -e "  ${CYAN}Status:${NC}        ./deploy-vps.sh --status"
     echo -e "  ${CYAN}Logs:${NC}          ./deploy-vps.sh --logs"
     echo -e "  ${CYAN}URL:${NC}           https://${MCP_SLUG}.${MCP_DOMAIN_BASE:-mcp.aimatrx.com}/mcp"
+else
+    echo ""
+    echo -e "  ${CYAN}First deploy:${NC}  ./deploy-aws.sh --create"
+    echo -e "  ${CYAN}Redeploy:${NC}      ./deploy-aws.sh"
+    echo -e "  ${CYAN}Status:${NC}        ./deploy-aws.sh --status"
+    echo -e "  ${CYAN}Logs:${NC}          ./deploy-aws.sh --logs"
+    echo -e "  ${CYAN}URL:${NC}           returned by AWS after the service is healthy"
 fi
 
 echo ""
@@ -442,4 +502,8 @@ if [[ "$AUTO_DEPLOY" == true && "$TIER" == "vps" ]]; then
     (cd "$OUTPUT_DIR" && ./deploy-vps.sh --create)
 elif [[ "$AUTO_DEPLOY" == true && "$TIER" == "cloudflare" ]]; then
     warn "Auto-deploy not yet supported for Cloudflare tier. Use the deploy command above."
+elif [[ "$AUTO_DEPLOY" == true && "$TIER" == "aws" ]]; then
+    echo -e "${CYAN}Auto-deploying to AWS App Runner...${NC}"
+    echo ""
+    (cd "$OUTPUT_DIR" && ./deploy-aws.sh --create)
 fi

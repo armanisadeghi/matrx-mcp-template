@@ -4,14 +4,17 @@ A monorepo template system for rapidly creating, deploying, and managing MCP (Mo
 
 ## Architecture
 
-**Two-tier deployment strategy:**
+**Three-target deployment strategy:**
 
 | Tier | Platform | Best For | Cost |
 |------|----------|----------|------|
 | **Cloudflare Workers** | Edge, global | Stateless utilities (SEO tools, text processing, formatters) | Free–$5/mo |
 | **VPS + Coolify** | Docker containers | Stateful services (DB access, long-running ops, complex logic) | ~$7–15/mo |
+| **AWS App Runner** | Managed Docker containers | AWS-adjacent tools, workload identity, managed replacement and scaling | Usage-based with provisioned baseline |
 
-Both tiers support **Python** (FastMCP) and **TypeScript** (official MCP SDK).
+All targets support **Python** (FastMCP) and/or **TypeScript** (official MCP SDK) as described below.
+The canonical agent and operations contract is
+[`common-docs/systems/mcp-hosting/FEATURE.md`](../common-docs/systems/mcp-hosting/FEATURE.md).
 
 ## Quick Start
 
@@ -33,7 +36,7 @@ Both tiers support **Python** (FastMCP) and **TypeScript** (official MCP SDK).
 |------|----------|--------|---------|
 | `--name` | Yes | Display name | — |
 | `--lang` | Yes | `python` \| `typescript` | — |
-| `--tier` | Yes | `cloudflare` \| `vps` | — |
+| `--tier` | Yes | `cloudflare` \| `vps` \| `aws` | — |
 | `--auth` | No | `none` \| `apikey` \| `supabase` | `apikey` |
 | `--db` | No | `none` \| `supabase` \| `postgres` | `none` |
 | `--description` | No | String | `"An MCP server"` |
@@ -79,10 +82,22 @@ wrangler deploy
 ### VPS + Coolify
 Push to GitHub → Coolify auto-deploys via Docker Compose → Available at `my-tool.mcp.yourdomain.com/mcp`
 
+### AWS App Runner
+```bash
+./generators/create-mcp.sh --name "My Tool" --lang typescript --tier aws --separate-repo
+cd mcps/my-tool
+./deploy-aws.sh --create
+# The verified AWS-managed HTTPS /mcp URL is printed after health succeeds.
+```
+
+AWS uses immutable ECR images, stateless Streamable HTTP, App Runner health replacement and an IAM
+runtime role. It does not create or change DNS.
+
 ## Documentation
 
 - [Cloudflare Deployment Guide](docs/DEPLOYMENT-CLOUDFLARE.md)
 - [VPS Deployment Guide](docs/DEPLOYMENT-VPS.md)
+- [AWS Deployment Guide](docs/DEPLOYMENT-AWS.md)
 - [Authentication Guide](docs/AUTH-GUIDE.md)
 - [Adding Tools Guide](docs/ADDING-TOOLS.md)
 
